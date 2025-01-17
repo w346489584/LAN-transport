@@ -1,0 +1,2 @@
+//go:generate goversioninfo -icon=assets/icon.ico -manifest=assets/app.manifest -64 -o=build/resource.syso -platform-specific=true -ver-major=1 -ver-minor=0 -ver-patch=0 -ver-build=0 -product-ver-major=1 -product-ver-minor=0 -product-ver-patch=0 -product-ver-build=0 assets/versioninfo.json
+package main 

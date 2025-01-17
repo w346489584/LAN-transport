@@ -1,0 +1,25 @@
+# 编译输出
+/build/
+*.exe
+*.syso
+resource_windows_*.syso
+
+# 日志文件
+/logs/
+
+# 上传的文件
+/uploads/
+
+# IDE配置
+.idea/
+.vscode/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 生成的资源文件
+resource_windows_386.syso
+resource_windows_amd64.syso
+resource_windows_arm.syso
+resource_windows_arm64.syso 
