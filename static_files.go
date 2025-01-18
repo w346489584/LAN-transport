@@ -10,7 +10,7 @@ import (
 )
 
 //go:embed static/*
-var embeddedFiles embed.FS
+var staticFiles embed.FS
 
 // 获取静态文件系统
 // 优先使用本地文件，如果本地文件不存在则使用嵌入的文件
@@ -24,7 +24,7 @@ func getStaticFS() http.FileSystem {
 	// 如果本地目录不存在，使用嵌入的文件
 	log.Println("使用嵌入的静态文件")
 	// 因为嵌入的文件包含"static"前缀，需要去掉这个前缀
-	stripped, err := fs.Sub(embeddedFiles, "static")
+	stripped, err := fs.Sub(staticFiles, "static")
 	if err != nil {
 		log.Printf("无法处理嵌入的静态文件: %v", err)
 		return nil
@@ -41,5 +41,5 @@ func getStaticFile(filename string) ([]byte, error) {
 	}
 
 	// 如果本地文件不存在，从嵌入的文件系统读取
-	return embeddedFiles.ReadFile(filepath.Join("static", filename))
+	return staticFiles.ReadFile(filepath.Join("static", filename))
 } 

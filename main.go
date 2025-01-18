@@ -294,11 +294,9 @@ func getLocalIP() string {
 		return "127.0.0.1"
 	}
 
-	// 首先尝试查找以太网适配器
+	// 首先尝试查找 WLAN 接口
 	for _, iface := range interfaces {
-		// 检查是否是以太网适配器
-		if strings.Contains(strings.ToLower(iface.Name), "ethernet") || 
-		   strings.Contains(strings.ToLower(iface.Name), "以太网") {
+		if strings.Contains(strings.ToLower(iface.Name), "wlan") {
 			addrs, err := iface.Addrs()
 			if err != nil {
 				continue
@@ -314,16 +312,29 @@ func getLocalIP() string {
 		}
 	}
 
-	// 如果没有找到以太网适配器，回退到查找任意可用的IPv4地址
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return "127.0.0.1"
-	}
-	
-	for _, address := range addrs {
-		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipv4 := ipnet.IP.To4(); ipv4 != nil {
-				return ipv4.String()
+	// 如果没有找到 WLAN，查找其他有效的网络适配器
+	for _, iface := range interfaces {
+		// 检查是否是有效的网络适配器
+		if iface.Flags&net.FlagUp != 0 && // 接口已启用
+		   iface.Flags&net.FlagLoopback == 0 && // 不是回环接口
+		   !strings.Contains(strings.ToLower(iface.Name), "vmware") && // 不是虚拟机接口
+		   !strings.Contains(strings.ToLower(iface.Name), "virtual") && // 不是虚拟接口
+		   !strings.Contains(strings.ToLower(iface.Name), "bluetooth") { // 不是蓝牙接口
+			
+			addrs, err := iface.Addrs()
+			if err != nil {
+				continue
+			}
+			
+			for _, addr := range addrs {
+				if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+					if ipv4 := ipnet.IP.To4(); ipv4 != nil {
+						// 排除 169.254.x.x 地址
+						if !strings.HasPrefix(ipv4.String(), "169.254") {
+							return ipv4.String()
+						}
+					}
+				}
 			}
 		}
 	}
