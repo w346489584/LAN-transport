@@ -82,10 +82,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <div class="filename">${file.name}</div>
                 <div class="file-details">
                     <span class="file-time">${timeStr}</span>
-                    <div class="transfer-status">
+                    <div class="file-details-right">
                         ${withProgress ? 
-                            '<span class="upload-status">正在上传... <span class="upload-progress">0%</span></span>' : 
-                            `<span class="delete-btn" style="display: none; color: red; margin-right: 10px; cursor: pointer">删除</span><a href="${file.downloadUrl}" target="_blank">点击下载</a> <span class="filesize">(${formatSize(file.size)})</span>`
+                            `<div class="transfer-status">
+                                <span class="upload-status">
+                                    <span class="upload-status-main">正在上传... <span class="upload-speed"></span></span>
+                                    <span class="upload-status-sub"><span class="upload-progress">0%</span> <span class="upload-remaining"></span></span>
+                                </span>
+                            </div>` : 
+                            `<div class="transfer-status">
+                                <span class="delete-btn" style="display: none; color: red; margin-right: 10px; cursor: pointer">删除</span>
+                                <a href="${file.downloadUrl}" target="_blank">点击下载</a> 
+                                <span class="filesize">(${formatSize(file.size)})</span>
+                            </div>`
                         }
                     </div>
                 </div>
@@ -179,6 +188,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 获取进度条和进度文本元素
             const progressBar = transferItem.querySelector('.progress');
             const progressText = transferItem.querySelector('.upload-progress');
+            const speedText = transferItem.querySelector('.upload-speed');
+            const remainingText = transferItem.querySelector('.upload-remaining');
             
             // 创建 FormData
             const formData = new FormData();
@@ -188,12 +199,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             const xhr = new XMLHttpRequest();
             xhr.open('POST', '/upload', true);
 
+            // 用于计算速度的变量
+            let lastLoaded = 0;
+            let lastTime = Date.now();
+            const updateInterval = 1000; // 每秒更新一次速度
+
             // 进度处理
             xhr.upload.onprogress = (e) => {
                 if (e.lengthComputable) {
                     const percentComplete = Math.round((e.loaded / e.total) * 100);
                     progressBar.style.width = percentComplete + '%';
                     progressText.textContent = percentComplete + '%';
+
+                    // 计算速度
+                    const currentTime = Date.now();
+                    const timeElapsed = (currentTime - lastTime) / 1000; // 转换为秒
+                    if (timeElapsed >= 1) { // 每秒更新一次速度
+                        const loaded = e.loaded - lastLoaded;
+                        const speed = loaded / timeElapsed; // 字节/秒
+                        speedText.textContent = formatSpeed(speed);
+
+                        // 计算剩余时间
+                        const remaining = e.total - e.loaded;
+                        const remainingTime = remaining / speed; // 秒
+                        remainingText.textContent = formatTime(remainingTime);
+
+                        lastLoaded = e.loaded;
+                        lastTime = currentTime;
+                    }
                 }
             };
 
@@ -330,5 +363,45 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (bytes === 0) return '0 B';
         const i = Math.floor(Math.log(bytes) / Math.log(1024));
         return Math.round(bytes / Math.pow(1024, i)) + ' ' + sizes[i];
+    }
+
+    // 格式化速度
+    function formatSpeed(bytesPerSecond) {
+        const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+        let value = bytesPerSecond;
+        let unitIndex = 0;
+        
+        while (value >= 1024 && unitIndex < units.length - 1) {
+            value /= 1024;
+            unitIndex++;
+        }
+        
+        return Math.round(value) + ' ' + units[unitIndex];
+    }
+
+    // 格式化时间
+    function formatTime(seconds) {
+        if (seconds === Infinity || isNaN(seconds)) {
+            return '计算中...';
+        }
+
+        if (seconds < 1) {
+            return '即将完成';
+        }
+
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const secs = Math.floor(seconds % 60);
+
+        let timeStr = '';
+        if (hours > 0) {
+            timeStr += `${hours}小时`;
+        }
+        if (minutes > 0 || hours > 0) {
+            timeStr += `${minutes}分`;
+        }
+        timeStr += `${secs}秒`;
+
+        return `剩余${timeStr}`;
     }
 }); 

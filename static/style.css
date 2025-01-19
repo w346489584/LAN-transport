@@ -126,9 +126,18 @@ body {
     align-items: center;
 }
 
+.file-details-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+    justify-content: flex-end;
+}
+
 .file-time {
     color: #636e72;
     font-size: 0.9em;
+    flex-shrink: 0;
 }
 
 .transfer-status {
@@ -219,13 +228,45 @@ body {
 
 .upload-status {
     display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 4px;
+}
+
+.upload-status-main {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
     align-items: center;
     gap: 8px;
+    margin-top: 4px;
+}
+
+.upload-status-sub {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    clear: both;
 }
 
 .upload-progress {
     color: #4834d4;
     font-weight: bold;
+}
+
+.upload-speed {
+    color: #636e72;
+    font-size: 0.9em;
+    margin-left: 8px;
+}
+
+.upload-remaining {
+    color: #636e72;
+    font-size: 0.9em;
+    margin-left: 8px;
 }
 
 /* 确认对话框样式 */
@@ -310,5 +351,69 @@ body {
     }
     .select-file-btn {
         margin: 20px 0;
+    }
+    .file-details {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+    /* 上传状态的布局 */
+    .file-details-right {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex: none;
+    }
+    .transfer-status {
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        width: 100%;
+    }
+    /* 上传状态的第一行（时间戳和状态） */
+    .file-details > .file-time {
+        float: left;
+        margin-top: 4px;
+    }
+    .upload-status {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        gap: 4px;
+    }
+    .upload-status-main {
+        width: 100%;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+    }
+    /* 上传状态的第二行（进度和剩余时间） */
+    .upload-status-sub {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+        clear: both;
+    }
+    /* 已完成文件的布局 */
+    .file-details:not(:has(.upload-status)) {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .file-details:not(:has(.upload-status)) .file-details-right {
+        flex-direction: row;
+    }
+    .file-details:not(:has(.upload-status)) .transfer-status {
+        flex-direction: row;
+        justify-content: flex-end;
+        width: auto;
+    }
+    .upload-speed, .upload-remaining {
+        margin-left: 0;
     }
 } 
