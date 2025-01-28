@@ -5,7 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>局域网文件传输</title>
     <link rel="stylesheet" href="/static/style.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script>
+        // 确保 QRCode 库加载完成
+        window.addEventListener('load', function() {
+            if (typeof QRCode === 'undefined') {
+                console.error('QRCode 库加载失败');
+                document.getElementById('qrcode').innerHTML = '<div style="color: red;">QRCode 库加载失败，请刷新页面重试</div>';
+            }
+        });
+    </script>
+    <script type="module" src="/static/script.js"></script>
 </head>
 <body>
     <div class="container">
@@ -15,7 +25,7 @@
                     <svg class="upload-icon" viewBox="0 0 24 24">
                         <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
                     </svg>
-                    <button class="select-file-btn" onclick="document.getElementById('fileInput').click()">
+                    <button class="select-file-btn">
                         <svg viewBox="0 0 24 24">
                             <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
                         </svg>
@@ -51,10 +61,47 @@
             </div>
         </div>
 
+        <!-- 图片预览对话框 -->
+        <div id="imagePreviewDialog" class="image-preview-dialog" style="display: none;">
+            <div class="image-preview-content">
+                <div class="preview-toolbar">
+                    <button class="preview-btn download-btn">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                        </svg>
+                    </button>
+                    <button class="preview-btn close-btn">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="image-preview-container">
+                    <img id="previewImage" src="" alt="图片预览">
+                </div>
+            </div>
+        </div>
+
         <div class="author-info">
-            作者：Jason Mars | 微信：Break2029
+            <span>作者：Jason Mars | 微信：Break2029</span>
+            <div class="theme-switcher">
+                <button class="theme-btn" data-theme="blue" title="冰河蓝">
+                    <span class="theme-color"></span>
+                </button>
+                <button class="theme-btn" data-theme="mint" title="薄荷绿">
+                    <span class="theme-color"></span>
+                </button>
+                <button class="theme-btn" data-theme="gray" title="神秘灰">
+                    <span class="theme-color"></span>
+                </button>
+                <button class="theme-btn" data-theme="purple" title="典雅紫">
+                    <span class="theme-color"></span>
+                </button>
+                <button class="theme-btn" data-theme="pink" title="清新粉">
+                    <span class="theme-color"></span>
+                </button>
+            </div>
         </div>
     </div>
-    <script src="/static/script.js"></script>
 </body>
 </html> 
