@@ -53,6 +53,12 @@ body {
 
 .upload-section {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
 }
 
 .qr-section {
@@ -106,20 +112,20 @@ body {
 }
 
 #dropZone {
+    flex: 1;  /* 让上传区域自动填充剩余空间 */
     border: 2px dashed var(--theme-color);
-    padding: 40px;
+    padding: 20px;
     text-align: center;
     border-radius: 8px;
-    background-color: #f8f9fa;
+    background-color: white;
     cursor: pointer;
     transition: all 0.3s;
-    height: 100%;
-    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 15px;
+    min-height: 200px;  /* 设置最小高度而不是固定高度 */
 }
 
 #dropZone.drag-over {
@@ -724,4 +730,81 @@ body {
 
 .file-preview.has-thumbnail:hover {
     transform: scale(1.05);
-} 
+}
+
+/* 文本输入区域样式 */
+.text-section {
+    width: 300px;
+    padding: 0 10px;
+}
+
+.text-input-container {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    background-color: white;
+    border-radius: 8px;
+    transition: all 0.3s;
+}
+
+.text-input-container:focus-within {
+    border-color: var(--theme-color);
+}
+
+.text-input-container textarea {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-tap-highlight-color: transparent;
+}
+
+#textInput {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.3s;
+    background-color: white;
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+#textInput:focus {
+    outline: none;
+    border-color: var(--theme-color);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+.copy-btn {
+    padding: 8px 16px;
+    background-color: var(--theme-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.copy-btn:hover {
+    background-color: var(--theme-hover);
+    transform: translateY(-2px);
+}
+
+.copy-btn:active {
+    transform: translateY(0);
+}
+
+.copy-btn svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+}

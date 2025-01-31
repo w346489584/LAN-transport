@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>局域网文件传输</title>
     <link rel="stylesheet" href="/static/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="/static/qrcode.min.js"></script>
     <script>
         // 确保 QRCode 库加载完成
         window.addEventListener('load', function() {
@@ -33,6 +33,15 @@
                     </button>
                     <div class="drag-text">或将文件拖放到这里</div>
                     <input type="file" id="fileInput" style="display: none;">
+                </div>
+
+                <div class="text-input-container">
+                    <textarea id="textInput" placeholder="在此输入要复制的文本..." rows="1"></textarea>
+                    <button id="copyText" class="copy-btn" title="复制文本">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                        </svg>
+                    </button>
                 </div>
             </div>
 

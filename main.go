@@ -16,6 +16,7 @@ import (
 	"github.com/getlantern/systray"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	"github.com/skratchdot/open-golang/open"
 )
 
@@ -35,7 +36,52 @@ var (
 		sync.RWMutex
 		m map[string]SharedFile
 	}{m: make(map[string]SharedFile)}
+
+	// WebSocket相关变量
+	wsUpgrader = websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true // 允许所有来源的WebSocket连接
+		},
+	}
+
+	// WebSocket连接管理
+	wsConnections = struct {
+		sync.RWMutex
+		conns map[*websocket.Conn]bool
+	}{conns: make(map[*websocket.Conn]bool)}
+
+	// 当前共享的文本内容
+	sharedText = struct {
+		sync.RWMutex
+		content string
+	}{}
 )
+
+// WebSocket消息结构
+type WSMessage struct {
+	Type    string `json:"type"`
+	Content string `json:"content"`
+}
+
+// 广播文本更新给所有WebSocket客户端
+func broadcastText(content string) {
+	message := WSMessage{
+		Type:    "text_update",
+		Content: content,
+	}
+
+	wsConnections.RLock()
+	for conn := range wsConnections.conns {
+			err := conn.WriteJSON(message)
+			if err != nil {
+				log.Printf("发送WebSocket消息失败: %v", err)
+				conn.Close()
+				delete(wsConnections.conns, conn)
+
+		}
+	}
+	wsConnections.RUnlock()
+}
 
 // 尝试用Chrome打开URL
 func openWithChrome(url string) error {
@@ -282,6 +328,51 @@ func main() {
 		}
 	}()
 
+	// WebSocket处理
+	r.GET("/ws", func(c *gin.Context) {
+		conn, err := wsUpgrader.Upgrade(c.Writer, c.Request, nil)
+		if err != nil {
+			log.Printf("WebSocket升级失败: %v", err)
+			return
+		}
+
+		// 将新连接添加到连接池
+		wsConnections.Lock()
+		wsConnections.conns[conn] = true
+		wsConnections.Unlock()
+
+		// 发送当前文本内容
+		sharedText.RLock()
+		if sharedText.content != "" {
+			conn.WriteJSON(WSMessage{
+				Type:    "text_update",
+				Content: sharedText.content,
+			})
+		}
+		sharedText.RUnlock()
+
+		// 处理WebSocket消息
+		go handleWebSocket(conn)
+	})
+
+	// 更新文本内容的API
+	r.POST("/text", func(c *gin.Context) {
+		var message WSMessage
+		if err := c.BindJSON(&message); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的消息格式"})
+			return
+		}
+
+		sharedText.Lock()
+		sharedText.content = message.Content
+		sharedText.Unlock()
+
+		// 广播更新
+		broadcastText(message.Content)
+
+		c.JSON(http.StatusOK, gin.H{"status": "success"})
+	})
+
 	// 启动服务器
 	log.Printf("服务器运行在 %s", url)
 	r.Run(serverAddr)
@@ -387,4 +478,33 @@ func onReady() {
 
 func onExit() {
 	// 清理工作
+}
+
+// 处理WebSocket连接
+func handleWebSocket(conn *websocket.Conn) {
+	defer func() {
+		conn.Close()
+		wsConnections.Lock()
+		delete(wsConnections.conns, conn)
+		wsConnections.Unlock()
+	}()
+
+	for {
+		var message WSMessage
+		err := conn.ReadJSON(&message)
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("WebSocket错误: %v", err)
+			}
+			break
+		}
+
+		switch message.Type {
+		case "text_update":
+			sharedText.Lock()
+			sharedText.content = message.Content
+			sharedText.Unlock()
+			broadcastText(message.Content)
+		}
+	}
 } 

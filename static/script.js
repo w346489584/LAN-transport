@@ -6,6 +6,82 @@ function initApp() {
     const pageUrl = document.getElementById('pageUrl');
     const copyUrl = document.getElementById('copyUrl');
     const selectFileBtn = document.querySelector('.select-file-btn');
+    const textInput = document.getElementById('textInput');
+    const copyText = document.getElementById('copyText');
+
+    // 保存当前文件列表状态
+    let currentFiles = [];
+
+    // WebSocket连接
+    let ws = null;
+    let isEditing = false;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    const reconnectDelay = 1000; // 1秒
+
+    // 检查是否需要更新文件列表
+    function shouldUpdateFileList(oldFiles, newFiles) {
+        // 1. 文件数量不同
+        if (oldFiles.length !== newFiles.length) {
+            return true;
+        }
+        
+        // 2. 文件ID列表不同
+        const oldIds = new Set(oldFiles.map(f => f.id));
+        const newIds = new Set(newFiles.map(f => f.id));
+        if (oldIds.size !== newIds.size) {
+            return true;
+        }
+        
+        // 3. 检查每个文件的关键属性是否变化
+        for (let i = 0; i < newFiles.length; i++) {
+            const oldFile = oldFiles[i];
+            const newFile = newFiles[i];
+            
+            if (oldFile.id !== newFile.id ||
+                oldFile.name !== newFile.name ||
+                oldFile.size !== newFile.size ||
+                oldFile.createdAt !== newFile.createdAt) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    // 更新文件列表UI
+    function updateFileList(files) {
+        // 保存正在上传的文件
+        const uploadingItems = Array.from(transferList.children).filter(item => 
+            item.querySelector('.upload-progress') !== null
+        );
+        
+        // 清空现有列表
+        transferList.innerHTML = '';
+        
+        // 恢复正在上传的文件
+        uploadingItems.forEach(item => {
+            transferList.appendChild(item);
+        });
+        
+        // 添加其他文件
+        for (const file of files) {
+            // 如果文件正在上传中，跳过
+            if (uploadingItems.some(item => item.dataset.id === file.id)) {
+                continue;
+            }
+            
+            const transferItem = createTransferItem({
+                id: file.id,
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                createdAt: file.createdAt,
+                downloadUrl: `/preview/${file.id}`
+            }, false);
+            transferList.appendChild(transferItem);
+        }
+    }
 
     // 初始化主题
     function initTheme() {
@@ -33,6 +109,65 @@ function initApp() {
             });
         });
     }
+
+    // 文本复制功能
+    copyText.addEventListener('click', () => {
+        const text = textInput.value.trim();
+        if (!text) {
+            showToast('请先输入要复制的文本');
+            return;
+        }
+
+        try {
+            // 尝试使用新的Clipboard API
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text)
+                    .then(() => {
+                        showCopyAnimation();
+                    })
+                    .catch(() => {
+                        // 如果Clipboard API失败，回退到传统方法
+                        fallbackCopy();
+                    });
+            } else {
+                // 直接使用传统方法
+                fallbackCopy();
+            }
+        } catch (err) {
+            console.error('复制出错:', err);
+            showToast('复制失败，请重试');
+        }
+
+        // 传统复制方法
+        function fallbackCopy() {
+            const originalPosition = textInput.selectionStart;
+            textInput.select();
+            textInput.setSelectionRange(0, text.length);
+            const success = document.execCommand('copy');
+            if (success) {
+                // 恢复原始光标位置
+                setTimeout(() => {
+                    textInput.setSelectionRange(originalPosition, originalPosition);
+                    textInput.focus();
+                }, 0);
+                showCopyAnimation();
+            } else {
+                showToast('复制失败，请重试');
+            }
+        }
+
+        // 显示复制成功动画
+        function showCopyAnimation() {
+            const originalSvg = copyText.innerHTML;
+            copyText.innerHTML = `<svg viewBox="0 0 24 24">
+                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+            </svg>`;
+            
+            setTimeout(() => {
+                copyText.innerHTML = originalSvg;
+            }, 1000);
+        }
+    });
 
     // 选择文件按钮点击事件
     selectFileBtn.addEventListener('click', (e) => {
@@ -93,6 +228,83 @@ function initApp() {
             }
         }
     }
+
+    // 初始化WebSocket连接
+    function initWebSocket() {
+        getServerIP().then(serverIP => {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${serverIP}:1112/ws`;
+            console.log('正在连接WebSocket:', wsUrl);
+            
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log('WebSocket连接已建立');
+                reconnectAttempts = 0;
+            };
+
+            ws.onmessage = (event) => {
+                console.log('收到WebSocket消息:', event.data);
+                const message = JSON.parse(event.data);
+                if (message.type === 'text_update' && !isEditing) {
+                    const currentPosition = textInput.selectionStart;
+                    const currentLength = textInput.value.length;
+                    const newLength = message.content.length;
+                    
+                    textInput.value = message.content;
+                    
+                    // 根据文本长度变化调整光标位置
+                    if (currentPosition <= currentLength) {
+                        const newPosition = Math.min(currentPosition, newLength);
+                        textInput.setSelectionRange(newPosition, newPosition);
+                    }
+                    autoResize();
+                }
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket连接已关闭');
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    setTimeout(() => {
+                        console.log(`尝试重新连接 (${reconnectAttempts + 1}/${maxReconnectAttempts})`);
+                        reconnectAttempts++;
+                        initWebSocket();
+                    }, reconnectDelay);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket错误:', error);
+            };
+        });
+    }
+
+    // 发送文本更新
+    function sendTextUpdate(text) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            console.log('发送文本更新:', text);
+            ws.send(JSON.stringify({
+                type: 'text_update',
+                content: text
+            }));
+        } else {
+            console.warn('WebSocket未连接，无法发送消息');
+        }
+    }
+
+    // 文本输入处理
+    let textUpdateTimeout = null;
+    textInput.addEventListener('input', () => {
+        isEditing = true;
+        autoResize();
+        if (textUpdateTimeout) {
+            clearTimeout(textUpdateTimeout);
+        }
+        textUpdateTimeout = setTimeout(() => {
+            sendTextUpdate(textInput.value);
+            isEditing = false;
+        }, 300);
+    });
 
     // 获取服务器基础URL并生成二维码
     console.log('开始初始化服务器URL');
@@ -327,15 +539,15 @@ function initApp() {
                 ${!withProgress ? `<span class="filesize">${formatSize(file.size)}</span>` : ''}
             </div>
             <div class="file-info-row">
-                <span class="file-time">${timeStr}</span>
-                ${withProgress ? 
-                    `<div class="transfer-status">
-                        <span class="upload-status">
-                            <span class="upload-status-main">正在上传... <span class="upload-speed"></span></span>
-                            <span class="upload-status-sub"><span class="upload-progress">0%</span> <span class="upload-remaining"></span></span>
-                        </span>
-                    </div>` : 
-                    `<div class="transfer-status">
+                    <span class="file-time">${timeStr}</span>
+                        ${withProgress ? 
+                            `<div class="transfer-status">
+                                <span class="upload-status">
+                                    <span class="upload-status-main">正在上传... <span class="upload-speed"></span></span>
+                                    <span class="upload-status-sub"><span class="upload-progress">0%</span> <span class="upload-remaining"></span></span>
+                                </span>
+                            </div>` : 
+                            `<div class="transfer-status">
                         <button class="delete-btn" style="display: none">
                             <svg viewBox="0 0 24 24">
                                 <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
@@ -348,10 +560,10 @@ function initApp() {
                             </svg>
                             点击下载
                         </button>
-                    </div>`
-                }
-            </div>
-            ${withProgress ? '<div class="progress-bar"><div class="progress"></div></div>' : ''}
+                            </div>`
+                        }
+                </div>
+                ${withProgress ? '<div class="progress-bar"><div class="progress"></div></div>' : ''}
         `;
 
         // 如果是图片或视频，创建并添加缩略图
@@ -379,62 +591,62 @@ function initApp() {
             if (!isMobile()) {
                 deleteBtn.style.display = 'inline-flex';
                 deleteBtn.addEventListener('click', () => {
-                    // 显示确认对话框
-                    const confirmDialog = document.getElementById('confirmDialog');
-                    const confirmBtn = confirmDialog.querySelector('.confirm-btn');
-                    const cancelBtn = confirmDialog.querySelector('.cancel-btn');
+                // 显示确认对话框
+                const confirmDialog = document.getElementById('confirmDialog');
+                const confirmBtn = confirmDialog.querySelector('.confirm-btn');
+                const cancelBtn = confirmDialog.querySelector('.cancel-btn');
+                
+                confirmDialog.style.display = 'flex';
+                
+                // 创建Promise来处理用户选择
+                const userChoice = new Promise((resolve) => {
+                    const handleConfirm = () => {
+                        cleanup();
+                        resolve(true);
+                    };
                     
-                    confirmDialog.style.display = 'flex';
+                    const handleCancel = () => {
+                        cleanup();
+                        resolve(false);
+                    };
                     
-                    // 创建Promise来处理用户选择
-                    const userChoice = new Promise((resolve) => {
-                        const handleConfirm = () => {
-                            cleanup();
-                            resolve(true);
-                        };
-                        
-                        const handleCancel = () => {
+                    const handleOutsideClick = (e) => {
+                        if (e.target === confirmDialog) {
                             cleanup();
                             resolve(false);
-                        };
-                        
-                        const handleOutsideClick = (e) => {
-                            if (e.target === confirmDialog) {
-                                cleanup();
-                                resolve(false);
-                            }
-                        };
-                        
-                        // 清理事件监听器
-                        const cleanup = () => {
-                            confirmDialog.style.display = 'none';
-                            confirmBtn.removeEventListener('click', handleConfirm);
-                            cancelBtn.removeEventListener('click', handleCancel);
-                            confirmDialog.removeEventListener('click', handleOutsideClick);
-                        };
-                        
-                        confirmBtn.addEventListener('click', handleConfirm);
-                        cancelBtn.addEventListener('click', handleCancel);
-                        confirmDialog.addEventListener('click', handleOutsideClick);
-                    });
+                        }
+                    };
                     
-                    // 等待用户选择
+                    // 清理事件监听器
+                    const cleanup = () => {
+                        confirmDialog.style.display = 'none';
+                        confirmBtn.removeEventListener('click', handleConfirm);
+                        cancelBtn.removeEventListener('click', handleCancel);
+                        confirmDialog.removeEventListener('click', handleOutsideClick);
+                    };
+                    
+                    confirmBtn.addEventListener('click', handleConfirm);
+                    cancelBtn.addEventListener('click', handleCancel);
+                    confirmDialog.addEventListener('click', handleOutsideClick);
+                });
+                
+                // 等待用户选择
                     userChoice.then(confirmed => {
-                        if (confirmed) {
-                            try {
+                if (confirmed) {
+                    try {
                                 fetch(`/delete/${file.id}`, {
-                                    method: 'DELETE'
+                            method: 'DELETE'
                                 }).then(response => {
-                                    if (response.ok) {
-                                        item.remove();
-                                    } else {
-                                        alert('删除文件失败');
-                                    }
+                        if (response.ok) {
+                            item.remove();
+                        } else {
+                            alert('删除文件失败');
+                        }
                                 });
-                            } catch (error) {
-                                console.error('删除文件出错:', error);
-                                alert('删除文件失败');
-                            }
+                    } catch (error) {
+                        console.error('删除文件出错:', error);
+                        alert('删除文件失败');
+                    }
                         }
                     });
                 });
@@ -579,26 +791,27 @@ function initApp() {
 
     // 拖拽效果
     ['dragenter', 'dragover'].forEach(eventName => {
-        dropZone.addEventListener('dragenter', () => {
+        dropZone.addEventListener(eventName, () => {
             dropZone.classList.add('drag-over');
         });
     });
 
     ['dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener('dragleave', () => {
+        dropZone.addEventListener(eventName, () => {
             dropZone.classList.remove('drag-over');
         });
     });
 
     // 处理文件拖放
-    dropZone.addEventListener('drop', (e) => {
-        const file = e.dataTransfer.files[0];
-        if (file) {
-            handleFileUpload(file);
-        }
+        dropZone.addEventListener('drop', (e) => {
+            dropZone.classList.remove('drag-over');  // 确保移除drag-over类
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                handleFileUpload(file);
+            }
     });
 
-    // 页面加载时获取已分享的文件列表
+    // 加载共享文件列表
     function loadSharedFiles() {
         fetch('/shares')
             .then(response => response.json())
@@ -606,40 +819,15 @@ function initApp() {
             // 按创建时间倒序排序
             files.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
             
-            // 保存正在上传的文件
-            const uploadingItems = Array.from(transferList.children).filter(item => 
-                item.querySelector('.upload-progress') !== null
-            );
-            
-            // 清空现有列表
-            transferList.innerHTML = '';
-            
-            // 恢复正在上传的文件
-            uploadingItems.forEach(item => {
-                transferList.appendChild(item);
-            });
-            
-            // 添加其他文件
-                for (const file of files) {
-                    // 如果文件正在上传中，跳过
-                    if (uploadingItems.some(item => item.dataset.id === file.id)) {
-                        continue;
-                    }
-                    
-                    const transferItem = createTransferItem({
-                        id: file.id,
-                        name: file.name,
-                        size: file.size,
-                        type: file.type,
-                        createdAt: file.createdAt,
-                        downloadUrl: `/preview/${file.id}`  // 预览用的URL
-                    }, false);
-                    transferList.appendChild(transferItem);
+                // 检查是否需要更新
+                if (shouldUpdateFileList(currentFiles, files)) {
+                    updateFileList(files);
+                    currentFiles = [...files]; // 更新本地状态
                 }
             })
             .catch(error => {
                 console.error('加载共享文件列表失败:', error);
-        });
+            });
     }
 
     // 初始化
@@ -647,6 +835,9 @@ function initApp() {
         try {
             // 初始化主题
             initTheme();
+            
+            // 初始化WebSocket连接
+            initWebSocket();
             
             // 获取服务器基础URL并生成二维码
             getServerIP().then(serverIP => {
@@ -700,7 +891,7 @@ function initApp() {
 
         if (seconds < 1) {
             return '即将完成';
-        }        
+        }
         const hours = Math.floor(seconds / 3600);
         const minutes = Math.floor((seconds % 3600) / 60);
         const secs = Math.floor(seconds % 60);
@@ -715,6 +906,39 @@ function initApp() {
         timeStr += `${secs}秒`;
 
         return `剩余${timeStr}`;
+    }
+
+    // 自动调整textarea高度
+    function autoResize() {
+        const minHeight = 38;
+        
+        // 如果内容高度超过当前高度，则扩展
+        if (textInput.scrollHeight > textInput.clientHeight) {
+            textInput.style.height = textInput.scrollHeight + 'px';
+        } else if (textInput.value === '' || textInput.scrollHeight <= minHeight) {
+            // 如果内容为空或内容高度不超过最小高度，重置为最小高度
+            textInput.style.height = minHeight + 'px';
+        }
+    }
+
+    textInput.addEventListener('input', autoResize);
+
+    function showToast(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.classList.add('show');
+        }, 10);
+
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => {
+                document.body.removeChild(toast);
+            }, 300);
+        }, 2000);
     }
 }
 
